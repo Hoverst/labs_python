@@ -13,6 +13,7 @@ class KnightPathGUI:
         self.start_pos = None
         self.end_pos = None
         self.path = []
+        self.obstacles = set()
 
         self.setup_ui()
         self.draw_board()
@@ -23,10 +24,9 @@ class KnightPathGUI:
 
         instructions = (
             "Інструкція:\n"
-            "1. Клікніть на дошку, щоб \nвстановити СТАРТ (зелений).\n"
-            "2. Клікніть вдруге, щоб \nвстановити ФІНІШ (червоний).\n"
-            "3. Шлях побудується автоматично.\n\n"
-            "Щоб почати заново -- \nклікніть ще раз."
+            "1. Лівий клік: встановити\nСТАРТ і ФІНІШ.\n"
+            "2. Правий клік: додати/\nвидалити ПЕРЕШКОДУ.\n"
+            "3. Третій лівий клік:\nпочати новий маршрут.\n"
         )
         tk.Label(control_frame, text=instructions, justify=tk.LEFT).pack(pady=10)
 
@@ -38,7 +38,10 @@ class KnightPathGUI:
 
         self.canvas = tk.Canvas(self.root, width=self.N*self.cell_size, height=self.N*self.cell_size, bg="white")
         self.canvas.pack(side=tk.RIGHT, padx=10, pady=10)
-        self.canvas.bind("<Button-1>", self.on_canvas_click)
+        
+        self.canvas.bind("<Button-1>", self.on_left_click)
+        self.canvas.bind("<Button-3>", self.on_right_click)
+        self.canvas.bind("<Button-2>", self.on_right_click)
 
     def draw_board(self):
         self.canvas.delete("all")
@@ -46,7 +49,11 @@ class KnightPathGUI:
 
         for r in range(self.N):
             for c in range(self.N):
-                color = "white" if (r + c) % 2 == 0 else "black"
+                color = "white" if (r + c) % 2 == 0 else "lightgray"
+                
+                if (r, c) in self.obstacles:
+                    color = "#444444"
+
                 x1 = c * self.cell_size
                 y1 = r * self.cell_size
                 x2 = x1 + self.cell_size
@@ -81,17 +88,21 @@ class KnightPathGUI:
             self.canvas.create_oval(x-15, y-15, x+15, y+15, fill="red")
             self.canvas.create_text(x, y, text="F", fill="white", font=("Arial", 12, "bold"))
 
-    def on_canvas_click(self, event):
+    def on_left_click(self, event):
         col = event.x // self.cell_size
         row = event.y // self.cell_size
 
         if 0 <= row < self.N and 0 <= col < self.N:
+            if (row, col) in self.obstacles:
+                return
+
             if self.start_pos is None:
                 self.start_pos = (row, col)
                 self.draw_board()
             elif self.end_pos is None:
-                self.end_pos = (row, col)
-                self.solve()
+                if (row, col) != self.start_pos:
+                    self.end_pos = (row, col)
+                    self.solve()
             else:
                 self.start_pos = (row, col)
                 self.end_pos = None
@@ -99,8 +110,24 @@ class KnightPathGUI:
                 self.info_label.config(text="Кроків: 0")
                 self.draw_board()
 
+    def on_right_click(self, event):
+        col = event.x // self.cell_size
+        row = event.y // self.cell_size
+
+        if 0 <= row < self.N and 0 <= col < self.N:
+            if (row, col) == self.start_pos or (row, col) == self.end_pos:
+                return
+
+            if (row, col) in self.obstacles:
+                self.obstacles.remove((row, col))
+            else:
+                self.obstacles.add((row, col))
+            
+            self.solve()
+
     def solve(self):
         if not self.start_pos or not self.end_pos:
+            self.draw_board()
             return
 
         moves = [(-2, 1), (-1, 2), (1, 2), (2, 1), (2, -1), (1, -2), (-1, -2), (-2, -1)]
@@ -118,9 +145,10 @@ class KnightPathGUI:
 
             for dr, dc in moves:
                 nr, nc = r + dr, c + dc
-                if 0 <= nr < self.N and 0 <= nc < self.N and (nr, nc) not in visited:
-                    visited.add((nr, nc))
-                    queue.append((nr, nc, current_path + [(nr, nc)]))
+                if 0 <= nr < self.N and 0 <= nc < self.N:
+                    if (nr, nc) not in visited and (nr, nc) not in self.obstacles:
+                        visited.add((nr, nc))
+                        queue.append((nr, nc, current_path + [(nr, nc)]))
 
         self.draw_board()
         if self.path:
@@ -146,6 +174,7 @@ class KnightPathGUI:
                 end_str = lines[2].split('#')[0].strip().split(',')
                 self.end_pos = (int(end_str[0].strip()), int(end_str[1].strip()))
 
+            self.obstacles.clear()
             self.solve()
 
             with open("output.txt", "w", encoding="utf-8") as f:
@@ -164,9 +193,9 @@ class KnightPathGUI:
         self.start_pos = None
         self.end_pos = None
         self.path = []
+        self.obstacles.clear()
         self.info_label.config(text="Кроків: 0")
         self.draw_board()
-
 
 if __name__ == "__main__":
     root = tk.Tk()
